@@ -1,4 +1,4 @@
-# 🏦 KipuBank
+# KipuBank
 
 **Autor:** Gabriela Lavia  
 **Red:** Sepolia Testnet  
