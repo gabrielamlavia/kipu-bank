@@ -100,4 +100,57 @@ contract KipuBank {
         if (amount == 0) revert InvalidDeposit(amount);
 
         uint256 newTotal = totalDeposits + amount;
-        if (newTotal >
+        if (newTotal > bankCap) revert BankCapExceeded(newTotal, bankCap);
+
+        // ✅ Effects
+        balances[msg.sender] += amount;
+        totalDeposits = newTotal;
+
+        // ✅ Interactions
+        emit Deposit(msg.sender, amount);
+    }
+
+    /// @notice Allows users to withdraw ETH up to the allowed limit.
+    /// @param amount The amount to withdraw.
+    /// @dev Follows checks-effects-interactions pattern.
+    function withdraw(uint256 amount)
+        external
+        hasEnoughBalance(amount)
+    {
+        if (amount > withdrawLimit) revert WithdrawLimitExceeded(amount, withdrawLimit);
+
+        uint256 userBalance = balances[msg.sender];
+
+        // ✅ Effects
+        unchecked {
+            balances[msg.sender] = userBalance - amount;
+            totalWithdrawals += amount;
+        }
+
+        // ✅ Interactions (safe transfer)
+        (bool success, ) = msg.sender.call{value: amount}("");
+        if (!success) revert TransferFailed();
+
+        emit Withdrawal(msg.sender, amount);
+    }
+
+    /// @notice Returns the ETH balance of a given user.
+    /// @param user The address to query.
+    /// @return balance The user’s vault balance.
+    function getBalance(address user)
+        external
+        view
+        returns (uint256 balance)
+    {
+        balance = balances[user];
+    }
+
+    // --------------------------------------------------------------------
+    // ------------------------ Private Helpers ----------------------------
+    // --------------------------------------------------------------------
+
+    /// @notice Example private helper that could update counters or internal logic.
+    function _internalExample() private pure returns (bool) {
+        return true;
+    }
+}
