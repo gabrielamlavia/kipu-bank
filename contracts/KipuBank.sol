@@ -1,156 +1,168 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.27;
 
 /// @title KipuBank
-/// @notice A decentralized vault that allows users to deposit and withdraw native ETH with safety limits.
 /// @author Gabriela Lavia
-/// @dev This contract follows the checks-effects-interactions pattern and avoids multiple state reads/writes.
+/// @notice A decentralized ETH vault allowing deposits and controlled withdrawals.
+/// @dev Includes security best practices, custom errors, and gas optimizations.
 contract KipuBank {
+    // ------------------------------------------------------------
+    // 1. Immutable and Constant Variables
+    // ------------------------------------------------------------
 
-    // --------------------------------------------------------------------
-    // ----------------------------- Errors --------------------------------
-    // --------------------------------------------------------------------
+    /// @notice Maximum amount allowed per single withdrawal
+    uint256 public immutable withdrawalLimit;
 
-    /// @notice Thrown when a deposit amount is invalid.
-    /// @param amount The provided invalid amount.
-    error InvalidDeposit(uint256 amount);
-
-    /// @notice Thrown when trying to withdraw more than allowed per transaction.
-    /// @param requested The requested withdrawal amount.
-    /// @param limit The fixed withdrawal limit.
-    error WithdrawLimitExceeded(uint256 requested, uint256 limit);
-
-    /// @notice Thrown when user tries to withdraw more than available.
-    /// @param requested The requested amount.
-    /// @param available The user’s current balance.
-    error InsufficientBalance(uint256 requested, uint256 available);
-
-    /// @notice Thrown when the global deposit limit is reached.
-    /// @param current The total deposits so far.
-    /// @param cap The configured bank capacity.
-    error BankCapExceeded(uint256 current, uint256 cap);
-
-    /// @notice Thrown when a low-level call fails.
-    error TransferFailed();
-
-    // --------------------------------------------------------------------
-    // ----------------------------- Events --------------------------------
-    // --------------------------------------------------------------------
-
-    /// @notice Emitted when a user deposits ETH successfully.
-    /// @param user The address that made the deposit.
-    /// @param amount The amount deposited.
-    event Deposit(address indexed user, uint256 amount);
-
-    /// @notice Emitted when a user withdraws ETH successfully.
-    /// @param user The address that made the withdrawal.
-    /// @param amount The amount withdrawn.
-    event Withdrawal(address indexed user, uint256 amount);
-
-    // --------------------------------------------------------------------
-    // --------------------------- State -----------------------------------
-    // --------------------------------------------------------------------
-
-    /// @notice Tracks each user's balance.
-    mapping(address => uint256) private balances;
-
-    /// @notice Total ETH deposited into the bank.
-    uint256 public totalDeposits;
-
-    /// @notice Total ETH withdrawn from the bank.
-    uint256 public totalWithdrawals;
-
-    /// @notice Maximum total amount of ETH allowed in the contract.
+    /// @notice Global limit of total deposits allowed in the contract
     uint256 public immutable bankCap;
 
-    /// @notice Maximum amount a user can withdraw in a single transaction.
-    uint256 public immutable withdrawLimit;
+    // ------------------------------------------------------------
+    // 2. Storage Variables
+    // ------------------------------------------------------------
 
-    // --------------------------------------------------------------------
-    // -------------------------- Constructor ------------------------------
-    // --------------------------------------------------------------------
+    /// @notice Total ETH deposited across all users
+    uint256 public totalDeposits;
 
-    /// @param _bankCap The total ETH capacity of the bank.
-    /// @param _withdrawLimit The max withdrawal limit per transaction.
-    constructor(uint256 _bankCap, uint256 _withdrawLimit) {
+    /// @notice Counter for total deposits
+    uint256 public totalDepositCount;
+
+    /// @notice Counter for total withdrawals
+    uint256 public totalWithdrawCount;
+
+    // ------------------------------------------------------------
+    // 3. Mappings
+    // ------------------------------------------------------------
+
+    /// @notice Maps each user to their ETH balance
+    mapping(address => uint256) private balances;
+
+    // ------------------------------------------------------------
+    // 4. Events
+    // ------------------------------------------------------------
+
+    /// @notice Emitted when a user deposits ETH
+    /// @param user The address that made the deposit
+    /// @param amount The amount of ETH deposited
+    event DepositMade(address indexed user, uint256 amount);
+
+    /// @notice Emitted when a user withdraws ETH
+    /// @param user The address that made the withdrawal
+    /// @param amount The amount of ETH withdrawn
+    event WithdrawalMade(address indexed user, uint256 amount);
+
+    // ------------------------------------------------------------
+    // 5. Custom Errors
+    // ------------------------------------------------------------
+
+    /// @notice Thrown when a user tries to withdraw more than available
+    /// @param requested The requested amount
+    /// @param available The available balance
+    error InsufficientBalance(uint256 requested, uint256 available);
+
+    /// @notice Thrown when a withdrawal exceeds the immutable limit
+    /// @param attempted The attempted withdrawal amount
+    /// @param limit The allowed per-transaction limit
+    error WithdrawalOverLimit(uint256 attempted, uint256 limit);
+
+    /// @notice Thrown when deposits exceed the global bank cap
+    /// @param attempted Total amount attempted to deposit
+    /// @param cap Global maximum bank cap
+    error BankCapExceeded(uint256 attempted, uint256 cap);
+
+    // ------------------------------------------------------------
+    // 6. Constructor
+    // ------------------------------------------------------------
+
+    /// @param _withdrawalLimit The per-transaction withdrawal limit
+    /// @param _bankCap The total maximum allowed deposit in the bank
+    constructor(uint256 _withdrawalLimit, uint256 _bankCap) {
+        withdrawalLimit = _withdrawalLimit;
         bankCap = _bankCap;
-        withdrawLimit = _withdrawLimit;
     }
 
-    // --------------------------------------------------------------------
-    // -------------------------- Modifiers --------------------------------
-    // --------------------------------------------------------------------
+    // ------------------------------------------------------------
+    // 7. Modifiers
+    // ------------------------------------------------------------
 
-    /// @notice Ensures the caller has enough balance to perform an action.
-    /// @param amount The requested amount to validate.
+    /// @notice Ensures that the user has enough balance for a withdrawal
+    /// @param amount The amount requested for withdrawal
     modifier hasEnoughBalance(uint256 amount) {
         uint256 userBalance = balances[msg.sender];
-        if (amount > userBalance) revert InsufficientBalance(amount, userBalance);
+        if (amount > userBalance) {
+            revert InsufficientBalance(amount, userBalance);
+        }
         _;
     }
 
-    // --------------------------------------------------------------------
-    // --------------------------- Functions -------------------------------
-    // --------------------------------------------------------------------
+    // ------------------------------------------------------------
+    // 8. External Payable Function
+    // ------------------------------------------------------------
 
-    /// @notice Allows users to deposit native ETH into their personal vault.
-    /// @dev Emits a {Deposit} event.
+    /// @notice Deposit ETH into your personal vault
+    /// @dev Reverts if deposit would exceed global bank cap
     function deposit() external payable {
-        uint256 amount = msg.value;
-        if (amount == 0) revert InvalidDeposit(amount);
+        uint256 newTotal = totalDeposits + msg.value;
+        if (newTotal > bankCap) {
+            revert BankCapExceeded(newTotal, bankCap);
+        }
 
-        uint256 newTotal = totalDeposits + amount;
-        if (newTotal > bankCap) revert BankCapExceeded(newTotal, bankCap);
-
-        // ✅ Effects
-        balances[msg.sender] += amount;
         totalDeposits = newTotal;
+        unchecked {
+            balances[msg.sender] += msg.value;
+            totalDepositCount++;
+        }
 
-        // ✅ Interactions
-        emit Deposit(msg.sender, amount);
+        emit DepositMade(msg.sender, msg.value);
     }
 
-    /// @notice Allows users to withdraw ETH up to the allowed limit.
-    /// @param amount The amount to withdraw.
-    /// @dev Follows checks-effects-interactions pattern.
+    // ------------------------------------------------------------
+    // 9. Private Function
+    // ------------------------------------------------------------
+
+    /// @notice Internal helper to perform ETH transfers safely
+    /// @param to The recipient address
+    /// @param amount The amount of ETH to send
+    /// @return success Whether the transfer succeeded
+    function _safeTransfer(address to, uint256 amount) private returns (bool success) {
+        (success, ) = to.call{value: amount}("");
+        return success;
+    }
+
+    // ------------------------------------------------------------
+    // 10. External View Function
+    // ------------------------------------------------------------
+
+    /// @notice Get the ETH balance of a user
+    /// @param user The address to check
+    /// @return The current vault balance for the given user
+    function getBalance(address user) external view returns (uint256) {
+        return balances[user];
+    }
+
+    // ------------------------------------------------------------
+    // 11. External Withdraw Function
+    // ------------------------------------------------------------
+
+    /// @notice Withdraw ETH from your personal vault
+    /// @param amount The amount to withdraw
     function withdraw(uint256 amount)
         external
         hasEnoughBalance(amount)
     {
-        if (amount > withdrawLimit) revert WithdrawLimitExceeded(amount, withdrawLimit);
-
-        uint256 userBalance = balances[msg.sender];
-
-        // ✅ Effects
-        unchecked {
-            balances[msg.sender] = userBalance - amount;
-            totalWithdrawals += amount;
+        if (amount > withdrawalLimit) {
+            revert WithdrawalOverLimit(amount, withdrawalLimit);
         }
 
-        // ✅ Interactions (safe transfer)
-        (bool success, ) = msg.sender.call{value: amount}("");
-        if (!success) revert TransferFailed();
+        // Check-Effects-Interactions pattern
+        unchecked {
+            balances[msg.sender] -= amount;
+            totalDeposits -= amount;
+            totalWithdrawCount++;
+        }
 
-        emit Withdrawal(msg.sender, amount);
-    }
+        bool success = _safeTransfer(msg.sender, amount);
+        require(success, "Transfer failed");
 
-    /// @notice Returns the ETH balance of a given user.
-    /// @param user The address to query.
-    /// @return balance The user’s vault balance.
-    function getBalance(address user)
-        external
-        view
-        returns (uint256 balance)
-    {
-        balance = balances[user];
-    }
-
-    // --------------------------------------------------------------------
-    // ------------------------ Private Helpers ----------------------------
-    // --------------------------------------------------------------------
-
-    /// @notice Example private helper that could update counters or internal logic.
-    function _internalExample() private pure returns (bool) {
-        return true;
+        emit WithdrawalMade(msg.sender, amount);
     }
 }
