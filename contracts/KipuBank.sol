@@ -69,6 +69,11 @@ contract KipuBank {
     /// @param cap Global maximum bank cap
     error BankCapExceeded(uint256 attempted, uint256 cap);
 
+    /// @notice Thrown when a low-level ETH transfer fails
+    /// @param recipient The address that was supposed to receive ETH
+    /// @param amount The amount attempted to send
+    error TransferFailed(address recipient, uint256 amount);
+
     // ------------------------------------------------------------
     // 6. Constructor
     // ------------------------------------------------------------
@@ -161,7 +166,9 @@ contract KipuBank {
         }
 
         bool success = _safeTransfer(msg.sender, amount);
-        require(success, "Transfer failed");
+        if (!success) {
+            revert TransferFailed(msg.sender, amount);
+        }
 
         emit WithdrawalMade(msg.sender, amount);
     }
