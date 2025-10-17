@@ -90,7 +90,7 @@ contract KipuBank {
     // ------------------------------------------------------------
 
     /// @notice Ensures that the user has enough balance for a withdrawal
-    /// @param amount The amount requested for withdrawal
+    /// @param _amount The amount requested for withdrawal
     modifier hasEnoughBalance(uint256 _amount) {
         uint256 userBalance = balances[msg.sender];
         if (_amount > userBalance) {
@@ -125,8 +125,8 @@ contract KipuBank {
     // ------------------------------------------------------------
 
     /// @notice Internal helper to perform ETH transfers safely
-    /// @param to The recipient address
-    /// @param amount The amount of ETH to send
+    /// @param _to The recipient address
+    /// @param _amount The amount of ETH to send
     function _safeTransfer(address _to, uint256 _amount) private {
         (bool success, ) = _to.call{value: _amount}("");
         if (!success) revert TransferFailed();
@@ -137,7 +137,7 @@ contract KipuBank {
     // ------------------------------------------------------------
 
     /// @notice Get the ETH balance of a user
-    /// @param user The address to check
+    /// @param _user The address to check
     /// @return The current vault balance for the given user
     function getBalance(address _user) external view returns (uint256) {
         return balances[_user];
@@ -148,7 +148,7 @@ contract KipuBank {
     // ------------------------------------------------------------
 
     /// @notice Withdraw ETH from your personal vault
-    /// @param amount The amount to withdraw
+    /// @param _amount The amount to withdraw
     function withdraw(uint256 _amount)
         external
         hasEnoughBalance(_amount)
