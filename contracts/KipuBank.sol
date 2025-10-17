@@ -91,10 +91,10 @@ contract KipuBank {
 
     /// @notice Ensures that the user has enough balance for a withdrawal
     /// @param amount The amount requested for withdrawal
-    modifier hasEnoughBalance(uint256 amount) {
+    modifier hasEnoughBalance(uint256 _amount) {
         uint256 userBalance = balances[msg.sender];
-        if (amount > userBalance) {
-            revert InsufficientBalance(amount, userBalance);
+        if (_amount > userBalance) {
+            revert InsufficientBalance(_amount, userBalance);
         }
         _;
     }
@@ -127,10 +127,9 @@ contract KipuBank {
     /// @notice Internal helper to perform ETH transfers safely
     /// @param to The recipient address
     /// @param amount The amount of ETH to send
-    /// @return success Whether the transfer succeeded
-    function _safeTransfer(address to, uint256 amount) private returns (bool success) {
-        (success, ) = to.call{value: amount}("");
-        return success;
+    function _safeTransfer(address _to, uint256 _amount) private {
+        (bool success, ) = _to.call{value: _amount}("");
+        if (!success) revert TransferFailed();
     }
 
     // ------------------------------------------------------------
@@ -140,8 +139,8 @@ contract KipuBank {
     /// @notice Get the ETH balance of a user
     /// @param user The address to check
     /// @return The current vault balance for the given user
-    function getBalance(address user) external view returns (uint256) {
-        return balances[user];
+    function getBalance(address _user) external view returns (uint256) {
+        return balances[_user];
     }
 
     // ------------------------------------------------------------
@@ -150,26 +149,25 @@ contract KipuBank {
 
     /// @notice Withdraw ETH from your personal vault
     /// @param amount The amount to withdraw
-    function withdraw(uint256 amount)
+    function withdraw(uint256 _amount)
         external
-        hasEnoughBalance(amount)
+        hasEnoughBalance(_amount)
     {
-        if (amount > withdrawalLimit) {
-            revert WithdrawalOverLimit(amount, withdrawalLimit);
+        // 1. Check
+        if (_amount > withdrawalLimit) {
+            revert WithdrawalOverLimit(_amount, withdrawalLimit);
         }
 
-        // Check-Effects-Interactions pattern
+        // 2. Effects
         unchecked {
-            balances[msg.sender] -= amount;
-            totalDeposits -= amount;
+            balances[msg.sender] -= _amount;
+            totalDeposits -= _amount;
             totalWithdrawCount++;
         }
 
-        bool success = _safeTransfer(msg.sender, amount);
-        if (!success) {
-            revert TransferFailed(msg.sender, amount);
-        }
+        // 3. Interactions
+        _safeTransfer(msg.sender, _amount);
 
-        emit WithdrawalMade(msg.sender, amount);
+        emit WithdrawalMade(msg.sender, _amount);
     }
 }
