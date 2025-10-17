@@ -1,117 +1,106 @@
-# KipuBank
+# 🏦 KipuBank
 
-**Autor:** Gabriela Lavia  
+**Licencia:** MIT  
+**Lenguaje:** Solidity ^0.8.27  
+**Contrato:** `KipuBank`
+
+---
+
+## 📘 Descripción
+
+**KipuBank** es un contrato inteligente que funciona como una **bóveda descentralizada de ETH**, donde cada usuario puede:
+
+- Depositar ETH en su propia cuenta dentro del contrato.  
+- Retirar fondos de manera controlada, respetando un **límite máximo por transacción**.  
+- Operar dentro de un **límite global de depósitos (bankCap)** establecido en el momento del despliegue.
+
+El contrato fue diseñado siguiendo **buenas prácticas de seguridad y optimización de gas**, aplicando los patrones y convenciones vistos en clase.
+
+---
+
+## ⚙️ Estructura del contrato
+
+El código está organizado según la guía oficial de layout de Solidity:
+
+1. Variables **inmutables** y **constantes**  
+2. Variables de **almacenamiento**  
+3. **Mappings**  
+4. **Eventos**  
+5. **Errores personalizados**  
+6. **Constructor**  
+7. **Modificadores**  
+8. **Funciones externas `payable`**  
+9. **Funciones privadas**  
+10. **Funciones externas `view`**  
+11. **Función externa de retiro (`withdraw`)**
+
+---
+
+## 🚀 Instrucciones de despliegue
+
+### Opción 1 — Remix IDE (recomendada)
+
+1. Abrir [Remix IDE](https://remix.ethereum.org/)  
+2. Crear un archivo `KipuBank.sol` y pegar el código del contrato.  
+3. Compilar con **Solidity 0.8.27**  
+4. Ir a la pestaña **Deploy & Run Transactions**  
+5. Seleccionar **Injected Provider - MetaMask**  
+6. Conectarse a la red **Sepolia Testnet**  
+7. Completar los parámetros del constructor:  
+   ```solidity
+   _withdrawalLimit = 0.1 ether
+   _bankCap = 5 ether
+   ```
+8. Hacer clic en **Deploy** y confirmar la transacción en MetaMask.  
+9. Verificar el contrato en [Etherscan Sepolia](https://sepolia.etherscan.io/address/0xFD30a5102807514C075FFEa2F9ae519dA1Fec421#code).
+
+---
+
+## 🧩 Cómo interactuar con el contrato
+
+### 🔹 `deposit()`
+- **Tipo:** `external payable`
+- Permite depositar ETH en la bóveda del usuario.  
+- Emite el evento `DepositMade(address user, uint256 amount)`.  
+
+### 🔹 `withdraw(uint256 _amount)`
+- **Tipo:** `external`
+- Retira fondos hasta el límite permitido (`withdrawalLimit`).  
+- Emite el evento `WithdrawalMade(address user, uint256 amount)`.  
+- Usa el modificador `hasEnoughBalance`.
+
+### 🔹 `getBalance(address _user)`
+- **Tipo:** `external view`
+- Devuelve el saldo actual del usuario especificado.
+
+---
+
+## ⚠️ Seguridad y validaciones
+
+El contrato implementa verificaciones con **errores personalizados**:
+
+| Situación | Error personalizado | Descripción |
+|------------|--------------------|--------------|
+| Retiro mayor al balance disponible | `InsufficientBalance(requested, available)` | Evita sobregiros |
+| Retiro mayor al límite permitido | `WithdrawalOverLimit(attempted, limit)` | Controla el monto máximo |
+| Depósito supera el límite global | `BankCapExceeded(attempted, cap)` | Mantiene el cap total |
+| Fallo en la transferencia de ETH | `TransferFailed(recipient, amount)` | Maneja errores de `call` |
+
+---
+
+## 🧠 Buenas prácticas aplicadas
+
+- Patrón **Check-Effects-Interactions**  
+- Sin múltiples accesos a las mismas variables de estado  
+- Uso de **`unchecked`** donde es seguro  
+- **Modifiers** para validaciones lógicas  
+- **NatSpec completa** en funciones, errores y parámetros  
+- **Eventos** para trazabilidad de operaciones
+
+---
+
+## 📜 Contrato desplegado y verificado
+
+**Dirección:** [`0xFD30a5102807514C075FFEa2F9ae519dA1Fec421`](https://sepolia.etherscan.io/address/0xFD30a5102807514C075FFEa2F9ae519dA1Fec421#code)  
 **Red:** Sepolia Testnet  
-**Versión:** 1.0.0  
-**Licencia:** MIT
-
----
-
-## 🧩 Descripción
-
-**KipuBank** es un contrato inteligente desarrollado en Solidity que actúa como un banco descentralizado de tokens nativos (ETH).  
-Cada usuario puede **depositar** y **retirar** fondos desde su propia bóveda, siguiendo reglas de seguridad y límites definidos en el despliegue.
-
-### Funcionalidades principales
-
-- Los usuarios pueden **depositar ETH** en su bóveda personal.
-- Pueden **retirar ETH** hasta un **límite fijo por transacción** (`withdrawLimit`).
-- El contrato tiene un **límite global de depósitos** (`bankCap`), definido al desplegar.
-- Lleva registro de:
-  - Total de depósitos realizados.
-  - Total de retiros efectuados.
-- Emite **eventos** en cada operación exitosa.
-- Usa **errores personalizados** y el patrón `checks-effects-interactions` para máxima seguridad.
-
----
-
-## ⚙️ Despliegue
-
-### Prerrequisitos
-
-- [Remix IDE](https://remix.ethereum.org/)
-- [MetaMask](https://metamask.io/) conectado a **Sepolia Testnet**
-- ETH de prueba (puede obtenerse desde un faucet como [https://sepoliafaucet.com/](https://sepoliafaucet.com/))
-
-### Pasos para desplegar
-
-1. Abre **Remix IDE**.
-2. Crea un archivo llamado `KipuBank.sol` dentro de la carpeta `/contracts`.
-3. Copia el código fuente del contrato.
-4. Compila con el compilador Solidity **v0.8.20** o superior.
-5. En la pestaña **Deploy & Run Transactions**:
-   - Environment: `Injected Provider - MetaMask`
-   - Network: `Sepolia`
-6. Completa los parámetros del constructor:
-   - `bankCap`: límite total del banco (por ejemplo `10 ether`)
-   - `withdrawLimit`: límite máximo por retiro (por ejemplo `0.5 ether`)
-7. Presiona **Deploy**.
-8. Esperar MetaMask se abra y confirma. ( sin no tiene gas buscar en un faucet para agregar https://cloud.google.com/application/web3/faucet/ethereum/sepolia)
-9. Espera a que la transacción se confirme.
-
----
-
-## 💬 Interacción con el contrato
-
-Una vez desplegado:
-
-### Funciones principales
-
-| Función | Tipo | Descripción |
-|----------|------|--------------|
-| `deposit()` | `external payable` | Permite depositar ETH en la bóveda personal. |
-| `withdraw(uint256 amount)` | `external` | Permite retirar hasta el límite definido. |
-| `getBalance(address user)` | `external view` | Devuelve el balance almacenado de un usuario. |
-| `_updateStats()` | `private` | Función interna que actualiza contadores de operaciones. |
-
-### Eventos
-
-- `Deposit(address indexed user, uint256 amount)`
-- `Withdrawal(address indexed user, uint256 amount)`
-
-### Errores personalizados
-
-- `BankCapExceeded(uint256 current, uint256 cap)`
-- `WithdrawLimitExceeded(uint256 requested, uint256 limit)`
-- `InsufficientBalance(uint256 available, uint256 requested)`
-
----
-
-## 🧪 Ejemplo de interacción (Remix)
-
-1. Abre la pestaña **Deployed Contracts**.
-2. Expande el contrato desplegado.
-3. Para **depositar ETH**:  
-   - Ingresa un valor en “Value” (por ejemplo, `1 ether`).  
-   - Haz clic en **deposit()**.
-4. Para **retirar ETH**:  
-   - Ingresa un valor menor o igual a `withdrawLimit`.  
-   - Haz clic en **withdraw**.
-5. Usa **getBalance(address)** para consultar saldos.
-
----
-
-## 🌐 Dirección del contrato desplegado
-
-**Red:** Sepolia Testnet  
-**Dirección:** `0x995EbfDCfF4F5188EdE5D72c990df322cE52Ea79`  
-**Código verificado:** [Ver en Etherscan](https://sepolia.etherscan.io/address/0x995EbfDCfF4F5188EdE5D72c990df322cE52Ea79)
-
----
-
-## 🔒 Buenas prácticas aplicadas
-
-- Uso de `custom errors` en lugar de `require` con strings.
-- Patrón `checks-effects-interactions`.
-- Funciones bien delimitadas: `external`, `view`, `private`.
-- Variables `immutable` y `constant` para límites fijos.
-- Eventos y contadores para trazabilidad.
-- Documentación NatSpec completa.
-- Convenciones de nombres limpias y consistentes.
-
----
-
-## 🧑‍💻 Autor
-
-Creado por **Gabriela Lavia**  
-Proyecto académico y portafolio Web3 personal.  
+**Estado:** ✅ Código verificado en Etherscan  
