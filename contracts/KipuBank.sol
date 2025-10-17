@@ -129,7 +129,7 @@ contract KipuBank {
     /// @param _amount The amount of ETH to send
     function _safeTransfer(address _to, uint256 _amount) private {
         (bool success, ) = _to.call{value: _amount}("");
-        if (!success) revert TransferFailed();
+        if (!success) revert TransferFailed(_to, _amount);
     }
 
     // ------------------------------------------------------------
